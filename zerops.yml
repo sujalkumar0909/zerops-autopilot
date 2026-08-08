@@ -69,9 +69,7 @@ zerops:
         - cd frontend && npm run build
 
       deployFiles:
-        - frontend/dist
-        - frontend/package.json
-        - frontend/package-lock.json
+        - ./frontend/~
 
     run:
       base: alpine/nodejs@22
