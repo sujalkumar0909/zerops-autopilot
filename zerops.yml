@@ -1,4 +1,7 @@
 zerops:
+  # ==========================================
+  # API - Node.js / Express
+  # ==========================================
   - setup: api
     build:
       base: nodejs@22
@@ -17,3 +20,24 @@ zerops:
         httpGet:
           port: 3000
           path: /api/health
+
+
+  # ==========================================
+  # ANALYZER - Python / Flask
+  # ==========================================
+  - setup: analyzer
+    build:
+      base: alpine/python@3.12
+      deployFiles:
+        - analyzer/app.py
+      addToRunPrepare:
+        - analyzer/requirements.txt
+
+    run:
+      base: alpine/python@3.12
+      prepareCommands:
+        - python3 -m pip install -r analyzer/requirements.txt --ignore-installed
+      ports:
+        - port: 5000
+          httpSupport: true
+      start: python3 analyzer/app.py
