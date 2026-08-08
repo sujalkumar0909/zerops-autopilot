@@ -43,26 +43,28 @@ zerops:
       start: python3 analyzer/app.py
 
 
-  # ==========================================
-  # FRONTEND - React + Vite
-  # ==========================================
+# ==========================================
+# FRONTEND - React + Vite
+# ==========================================
 
-  - setup: frontend
-    build:
-      base: alpine/nodejs@22
+- setup: frontend
+  build:
+    base: alpine/nodejs@22
 
-      buildCommands:
-        - cd frontend && npm install
-        - cd frontend && npm run build
+    buildCommands:
+      - cd frontend && npm install
+      - cd frontend && npm run build
 
-      deployFiles:
-        - frontend/dist
+    deployFiles:
+      - frontend/dist
+      - frontend/package.json
+      - frontend/package-lock.json
 
-    run:
-      base: alpine/nodejs@22
+  run:
+    base: alpine/nodejs@22
 
-      ports:
-        - port: 3000
-          httpSupport: true
+    ports:
+      - port: 3000
+        httpSupport: true
 
-      start: npx vite preview --host 0.0.0.0 --port 3000
+    start: cd frontend && npx serve -s dist -l 3000
