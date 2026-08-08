@@ -1,21 +1,28 @@
 zerops:
+
   # ==========================================
   # API - Node.js / Express
   # ==========================================
+
   - setup: api
     build:
       base: nodejs@22
+
       buildCommands:
         - cd backend && npm install
+
       deployFiles:
         - ./backend/~
 
     run:
       base: nodejs@22
+
       ports:
         - port: 3000
           httpSupport: true
+
       start: npm start
+
       healthCheck:
         httpGet:
           port: 3000
@@ -25,22 +32,29 @@ zerops:
   # ==========================================
   # ANALYZER - Python / Flask
   # ==========================================
+
   - setup: analyzer
     build:
       base: alpine/python@3.12
+
       deployFiles:
         - analyzer/app.py
+
       addToRunPrepare:
         - analyzer/requirements.txt
 
     run:
       base: alpine/python@3.12
+
       prepareCommands:
         - python3 -m pip install -r analyzer/requirements.txt --ignore-installed
+
       ports:
         - port: 5000
           httpSupport: true
+
       start: python3 analyzer/app.py
+
 
   # ==========================================
   # FRONTEND - React + Vite
@@ -66,4 +80,4 @@ zerops:
         - port: 3000
           httpSupport: true
 
-      start: cd frontend && npx serve -s dist -l 3000
+      start: cd frontend && npm run preview -- --host 0.0.0.0 --port 3000
