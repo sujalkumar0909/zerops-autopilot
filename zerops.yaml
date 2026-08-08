@@ -1,0 +1,40 @@
+zerops:
+  - setup: analyzer
+    build:
+      base: python@latest
+      deployFiles:
+        - ./analyzer/app.py
+        - ./analyzer/requirements.txt
+    run:
+      base: python@latest
+      ports:
+        - port: 5000
+          protocol: TCP
+          httpSupport: true
+      start: python3 app.py
+
+  - setup: backend
+    build:
+      base: nodejs@latest
+      buildCommands:
+        - cd backend
+        - npm install
+    run:
+      base: nodejs@latest
+      ports:
+        - port: 3000
+          protocol: TCP
+          httpSupport: true
+      start: cd backend && npm start
+
+  - setup: frontend
+    build:
+      base: nodejs@latest
+      buildCommands:
+        - cd frontend
+        - npm install
+        - npm run build
+      deployFiles:
+        - ./frontend/dist/~
+    run:
+      base: static
