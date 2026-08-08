@@ -14,7 +14,7 @@ const app = express();
 
 const PORT = Number(process.env.PORT || 3000);
 const ANALYZER_URL =
-  process.env.ANALYZER_URL || "http://localhost:5000";
+  process.env.ANALYZER_URL || "http://analyzer:5000";
 
 const UPLOAD_DIR =
   process.env.UPLOAD_DIR ||
