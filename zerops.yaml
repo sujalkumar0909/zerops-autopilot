@@ -3,8 +3,7 @@ zerops:
     build:
       base: nodejs@22
       buildCommands:
-        - cd backend
-        - npm install
+        - cd backend && npm install
       deployFiles:
         - ./backend
     run:
