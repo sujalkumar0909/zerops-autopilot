@@ -78,4 +78,4 @@ zerops:
         - port: 3000
           httpSupport: true
 
-      start: cd frontend && npm run preview -- --host 0.0.0.0 --port 3000
+      start: npm run preview -- --host 0.0.0.0 --port 3000
