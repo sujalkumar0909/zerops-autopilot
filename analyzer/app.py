@@ -1,19 +1,29 @@
 from flask import Flask, request, jsonify
+
+
 import zipfile
+
+
 import os
+
+
 import tempfile
+
+
 import re
+
+
 import json
+
+
 from urllib.parse import urlparse
+
 
 app = Flask(__name__)
 
-# =========================================================
-# ZEROPS AUTOPILOT - STATIC ARCHITECTURE ANALYZER
-# No AI API key and no database connection are required.
-# =========================================================
 
 VERSION = "5.0"
+
 
 IGNORED_DIRECTORIES = {
     "node_modules", ".git", ".next", "dist", "build",
@@ -22,15 +32,18 @@ IGNORED_DIRECTORIES = {
     ".cache", ".parcel-cache", "target", "vendor"
 }
 
+
 FRONTEND_NAMES = {
     "frontend", "client", "web", "ui", "frontend-app",
     "website", "dashboard", "portal"
 }
 
+
 BACKEND_NAMES = {
     "backend", "server", "api", "service", "backend-api",
     "services", "app-server"
 }
+
 
 WORKER_NAMES = {
     "worker", "workers", "job", "jobs", "queue", "queues",
@@ -39,21 +52,25 @@ WORKER_NAMES = {
     "cron", "worker-service"
 }
 
+
 SOURCE_EXTENSIONS = (
     ".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".go", ".rs",
     ".rb", ".php", ".cs", ".json", ".yml", ".yaml", ".toml",
     ".env", ".txt", ".properties", ".ini", ".xml"
 )
 
+
 CODE_EXTENSIONS = (
     ".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".go", ".rs",
     ".rb", ".php", ".cs"
 )
 
+
 HEALTH_ROUTE_PATTERN = re.compile(
     r'["\'](/(?:api/)?(?:health|healthz|ready|readiness|live|liveness))["\']',
     flags=re.IGNORECASE
 )
+
 
 PORT_PATTERNS = [
     r"\bPORT\s*=\s*[\"']?(\d{2,5})",
@@ -62,6 +79,7 @@ PORT_PATTERNS = [
     r"\bEXPOSE\s+(\d{2,5})",
     r"\b--port[=\s]+(\d{2,5})",
 ]
+
 
 FRAMEWORK_RULES = {
     "Next.js": ["next"],
@@ -78,6 +96,7 @@ FRAMEWORK_RULES = {
     "Svelte": ["svelte"],
 }
 
+
 DATABASE_PATTERNS = {
     "PostgreSQL": ["postgres", "postgresql", "psycopg", "asyncpg"],
     "MySQL": ["mysql", "mysql2", "pymysql"],
@@ -89,6 +108,7 @@ DATABASE_PATTERNS = {
     "DynamoDB": ["dynamodb", "boto3"],
 }
 
+
 QUEUE_PATTERNS = {
     "RabbitMQ": ["rabbitmq", "amqp", "pika"],
     "Kafka": ["kafka", "confluent-kafka"],
@@ -99,14 +119,17 @@ QUEUE_PATTERNS = {
     "Google Pub/Sub": ["pubsub"],
 }
 
+
 CACHE_PATTERNS = {
     "Redis": ["redis", "ioredis", "redis-py"],
     "Memcached": ["memcached"],
 }
 
+
 STORAGE_PATTERNS = {
     "S3 / Object Storage": ["s3", "aws-sdk", "boto3", "minio", "objectstorage"],
 }
+
 
 SECRET_NAME_PATTERNS = re.compile(
     r"(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|PRIVATE_KEY|"
@@ -114,14 +137,11 @@ SECRET_NAME_PATTERNS = re.compile(
     re.IGNORECASE
 )
 
+
 URL_ENV_PATTERN = re.compile(
     r"\b([A-Z][A-Z0-9_]*(?:URL|URI|HOST|ENDPOINT)[A-Z0-9_]*)\b"
 )
 
-
-# =========================================================
-# BASIC HELPERS
-# =========================================================
 
 def clean_path(path):
     path = str(path).replace("\\", "/")
@@ -209,10 +229,6 @@ def get_directories(files):
 def directory_name(path):
     return clean_path(path).split("/")[-1]
 
-
-# =========================================================
-# MANIFEST / FRAMEWORK ANALYSIS
-# =========================================================
 
 def read_package_json(archive, file):
     return safe_json(
@@ -397,102 +413,6 @@ def detect_service_technology(
     return manifest
 
 
-def detect_technologies(files, archive):
-
-    technologies = []
-
-    if any(
-        basename(file) == "package.json"
-        for file in files
-    ):
-        technologies.append(
-            "Node.js / JavaScript"
-        )
-
-    if any(
-        basename(file) in {
-            "requirements.txt",
-            "pyproject.toml",
-            "pipfile"
-        }
-        for file in files
-    ):
-        technologies.append(
-            "Python"
-        )
-
-    if any(
-        basename(file) in {
-            "dockerfile",
-            "containerfile"
-        }
-        for file in files
-    ):
-        technologies.append(
-            "Docker / OCI"
-        )
-
-    if any(
-        basename(file) in {
-            "docker-compose.yml",
-            "docker-compose.yaml",
-            "compose.yml",
-            "compose.yaml"
-        }
-        for file in files
-    ):
-        technologies.append(
-            "Docker Compose"
-        )
-
-    if any(
-        basename(file) == "pom.xml"
-        for file in files
-    ):
-        technologies.append(
-            "Java"
-        )
-
-    if any(
-        basename(file) == "go.mod"
-        for file in files
-    ):
-        technologies.append(
-            "Go"
-        )
-
-    if any(
-        basename(file) == "cargo.toml"
-        for file in files
-    ):
-        technologies.append(
-            "Rust"
-        )
-
-    if any(
-        file.lower().endswith((".yml", ".yaml"))
-        and re.search(
-            r"(?m)^\s*kind\s*:\s*"
-            r"(Deployment|StatefulSet|DaemonSet|Job|CronJob|Service)\s*$",
-            read_text_from_zip(
-                archive,
-                file,
-                700_000
-            )
-        )
-        for file in files
-    ):
-        technologies.append(
-            "Kubernetes manifests"
-        )
-
-    return unique(technologies)
-
-
-# =========================================================
-# COMPOSE / KUBERNETES
-# =========================================================
-
 def detect_compose_files(files):
 
     names = {
@@ -537,250 +457,6 @@ def detect_kubernetes_files(
             result.append(file)
 
     return result
-
-
-def parse_compose_services(
-    archive,
-    compose_files
-):
-
-    services = {}
-
-    for file in compose_files:
-
-        text = read_text_from_zip(
-            archive,
-            file,
-            1_500_000
-        )
-
-        in_services = False
-        current = None
-
-        for raw in text.splitlines():
-
-            if (
-                not raw.strip()
-                or raw.lstrip().startswith("#")
-            ):
-                continue
-
-            indent = (
-                len(raw)
-                - len(raw.lstrip(" "))
-            )
-
-            stripped = raw.strip()
-
-            if (
-                stripped == "services:"
-                and indent == 0
-            ):
-                in_services = True
-                current = None
-                continue
-
-            if not in_services:
-                continue
-
-            if (
-                indent == 2
-                and stripped.endswith(":")
-                and not stripped.startswith("-")
-            ):
-
-                name = (
-                    stripped[:-1]
-                    .strip()
-                    .strip("'\"")
-                )
-
-                if name:
-
-                    current = name
-
-                    services.setdefault(
-                        name,
-                        {
-                            "name": name,
-                            "file": file,
-                            "image": None,
-                            "build": None,
-                            "ports": [],
-                            "depends_on": [],
-                            "replicas": 1
-                        }
-                    )
-
-                continue
-
-            if (
-                current
-                and current in services
-                and indent >= 4
-            ):
-
-                entry = services[current]
-
-                if stripped.startswith("image:"):
-
-                    entry["image"] = (
-                        stripped
-                        .split(":", 1)[1]
-                        .strip()
-                        .strip("'\"")
-                    )
-
-                elif stripped.startswith("build:"):
-
-                    entry["build"] = (
-                        stripped
-                        .split(":", 1)[1]
-                        .strip()
-                        .strip("'\"")
-                    )
-
-    # Second pass for nested lists.
-    for file in compose_files:
-
-        text = read_text_from_zip(
-            archive,
-            file,
-            1_500_000
-        )
-
-        current = None
-        in_services = False
-        block = None
-
-        for raw in text.splitlines():
-
-            if (
-                not raw.strip()
-                or raw.lstrip().startswith("#")
-            ):
-                continue
-
-            indent = (
-                len(raw)
-                - len(raw.lstrip(" "))
-            )
-
-            stripped = raw.strip()
-
-            if (
-                stripped == "services:"
-                and indent == 0
-            ):
-                in_services = True
-                current = None
-                block = None
-                continue
-
-            if not in_services:
-                continue
-
-            if (
-                indent == 2
-                and stripped.endswith(":")
-            ):
-
-                current = (
-                    stripped[:-1]
-                    .strip()
-                    .strip("'\"")
-                )
-
-                block = None
-                continue
-
-            if (
-                not current
-                or current not in services
-            ):
-                continue
-
-            if indent == 4:
-
-                block = (
-                    "ports"
-                    if stripped == "ports:"
-                    else
-                    "depends_on"
-                    if stripped == "depends_on:"
-                    else
-                    None
-                )
-
-                replicas = re.match(
-                    r"replicas:\s*(\d+)",
-                    stripped
-                )
-
-                if replicas:
-                    services[current][
-                        "replicas"
-                    ] = int(
-                        replicas.group(1)
-                    )
-
-                continue
-
-            if indent >= 6 and block:
-
-                if block == "ports":
-
-                    match = re.search(
-                        r'["\']?(\d+)'
-                        r'(?::(\d+))?',
-                        stripped
-                    )
-
-                    if match:
-
-                        port = int(
-                            match.group(2)
-                            or match.group(1)
-                        )
-
-                        if 1 <= port <= 65535:
-
-                            services[current][
-                                "ports"
-                            ].append(port)
-
-                elif block == "depends_on":
-
-                    dependency = (
-                        stripped
-                        .lstrip("- ")
-                        .strip()
-                        .strip("'\"")
-                    )
-
-                    if re.match(
-                        r"^[A-Za-z0-9_.-]+$",
-                        dependency
-                    ):
-                        services[current][
-                            "depends_on"
-                        ].append(
-                            dependency
-                        )
-
-    for item in services.values():
-
-        item["ports"] = unique(
-            item["ports"]
-        )
-
-        item["depends_on"] = unique(
-            item["depends_on"]
-        )
-
-    return list(
-        services.values()
-    )
 
 
 def parse_kubernetes_workloads(
@@ -860,10 +536,6 @@ def parse_kubernetes_workloads(
     return workloads
 
 
-# =========================================================
-# SERVICE DETECTION
-# =========================================================
-
 def classify_directory(
     name,
     technology,
@@ -940,262 +612,6 @@ def classify_directory(
     return None
 
 
-def detect_services(
-    files,
-    archive,
-    compose_services,
-    k8s_workloads
-):
-
-    services = []
-
-    directories = get_directories(
-        files
-    )
-
-    for path, directory_files in directories.items():
-
-        name = directory_name(path)
-
-        technology = detect_service_technology(
-            directory_files,
-            archive
-        )
-
-        service_type = classify_directory(
-            name,
-            technology,
-            directory_files,
-            archive
-        )
-
-        if service_type:
-
-            services.append({
-
-                "name":
-                    name,
-
-                "technology":
-                    technology,
-
-                "type":
-                    service_type,
-
-                "directory":
-                    path,
-
-                "frameworks":
-                    detect_frameworks(
-                        directory_files,
-                        archive
-                    )
-
-            })
-
-    # Root-level application.
-    root_files = [
-        file
-        for file in files
-        if "/" not in file
-    ]
-
-    root_technology = (
-        detect_service_technology(
-            root_files,
-            archive
-        )
-    )
-
-    if root_technology != "Unknown":
-
-        root_type = (
-            classify_directory(
-                "application",
-                root_technology,
-                root_files,
-                archive
-            )
-            or "backend"
-        )
-
-        if not any(
-            service["directory"] == "."
-            for service in services
-        ):
-
-            services.append({
-
-                "name":
-                    "application",
-
-                "technology":
-                    root_technology,
-
-                "type":
-                    root_type,
-
-                "directory":
-                    ".",
-
-                "frameworks":
-                    detect_frameworks(
-                        root_files,
-                        archive
-                    )
-
-            })
-
-    # Compose services.
-    existing_names = {
-        service["name"].lower()
-        for service in services
-    }
-
-    for item in compose_services:
-
-        if (
-            item["name"].lower()
-            in existing_names
-        ):
-            continue
-
-        name_lower = (
-            item["name"].lower()
-        )
-
-        service_type = (
-            "frontend"
-            if name_lower in FRONTEND_NAMES
-            else
-            "worker"
-            if name_lower in WORKER_NAMES
-            else
-            "backend"
-        )
-
-        technology = "Container"
-
-        if item.get("image"):
-
-            image = (
-                item["image"]
-                .lower()
-            )
-
-            if "node" in image:
-                technology = "Node.js"
-
-            elif "python" in image:
-                technology = "Python"
-
-            elif "nginx" in image:
-                technology = "Nginx"
-
-        services.append({
-
-            "name":
-                item["name"],
-
-            "technology":
-                technology,
-
-            "type":
-                service_type,
-
-            "directory":
-                item.get("build") or "",
-
-            "frameworks":
-                []
-
-        })
-
-    # Kubernetes workloads.
-    existing_names = {
-        service["name"].lower()
-        for service in services
-    }
-
-    for item in k8s_workloads:
-
-        if (
-            item["name"].lower()
-            in existing_names
-        ):
-            continue
-
-        name_lower = (
-            item["name"].lower()
-        )
-
-        service_type = (
-            "worker"
-            if any(
-                name in name_lower
-                for name in WORKER_NAMES
-            )
-            else
-            "frontend"
-            if any(
-                name in name_lower
-                for name in FRONTEND_NAMES
-            )
-            else
-            "backend"
-        )
-
-        services.append({
-
-            "name":
-                item["name"],
-
-            "technology":
-                "Kubernetes",
-
-            "type":
-                service_type,
-
-            "directory":
-                "",
-
-            "frameworks":
-                [],
-
-            "declared_replicas":
-                item["replicas"]
-
-        })
-
-    result = []
-    seen = set()
-
-    for service in services:
-
-        key = (
-            service["name"].lower(),
-            service["type"],
-            service.get(
-                "directory",
-                ""
-            )
-        )
-
-        if key not in seen:
-
-            seen.add(key)
-
-            result.append(
-                service
-            )
-
-    return result
-
-
-# =========================================================
-# DEPENDENCY DETECTION
-# =========================================================
-
 def collect_project_text(
     files,
     archive,
@@ -1235,172 +651,6 @@ def collect_project_text(
         chunks
     ).lower()
 
-
-def detect_dependencies(
-    files,
-    archive
-):
-
-    text = collect_project_text(
-        files,
-        archive
-    )
-
-    dependencies = {
-
-        "databases":
-            [],
-
-        "queues":
-            [],
-
-        "caches":
-            [],
-
-        "object_storage":
-            [],
-
-        "external_services":
-            []
-
-    }
-
-    evidence = {
-
-        "databases":
-            {},
-
-        "queues":
-            {},
-
-        "caches":
-            {},
-
-        "object_storage":
-            {}
-
-    }
-
-    for category, patterns in DATABASE_PATTERNS.items():
-
-        matches = [
-            pattern
-            for pattern in patterns
-            if pattern in text
-        ]
-
-        if matches:
-
-            dependencies[
-                "databases"
-            ].append(
-                category
-            )
-
-            evidence[
-                "databases"
-            ][category] = matches[:5]
-
-    for category, patterns in QUEUE_PATTERNS.items():
-
-        matches = [
-            pattern
-            for pattern in patterns
-            if pattern in text
-        ]
-
-        if matches:
-
-            dependencies[
-                "queues"
-            ].append(
-                category
-            )
-
-            evidence[
-                "queues"
-            ][category] = matches[:5]
-
-    for category, patterns in CACHE_PATTERNS.items():
-
-        matches = [
-            pattern
-            for pattern in patterns
-            if pattern in text
-        ]
-
-        if matches:
-
-            dependencies[
-                "caches"
-            ].append(
-                category
-            )
-
-            evidence[
-                "caches"
-            ][category] = matches[:5]
-
-    for category, patterns in STORAGE_PATTERNS.items():
-
-        matches = [
-            pattern
-            for pattern in patterns
-            if pattern in text
-        ]
-
-        if matches:
-
-            dependencies[
-                "object_storage"
-            ].append(
-                category
-            )
-
-            evidence[
-                "object_storage"
-            ][category] = matches[:5]
-
-    urls = set()
-
-    for match in re.findall(
-        r"https?://[A-Za-z0-9._:-]+",
-        text
-    ):
-
-        try:
-
-            host = urlparse(
-                match
-            ).hostname
-
-            if (
-                host
-                and host not in {
-                    "localhost",
-                    "127.0.0.1"
-                }
-            ):
-                urls.add(host)
-
-        except Exception:
-            pass
-
-    dependencies[
-        "external_services"
-    ] = sorted(
-        urls
-    )[:50]
-
-    return (
-        dependencies,
-        evidence
-    )
-
-
-# =========================================================
-# ENVIRONMENT / SECRETS
-# =========================================================
 
 def detect_environment(
     files,
@@ -1497,10 +747,6 @@ def detect_environment(
     }
 
 
-# =========================================================
-# PORT / HEALTH DETECTION
-# =========================================================
-
 def detect_ports(
     files,
     archive
@@ -1592,91 +838,6 @@ def detect_health_endpoints(
     )
 
 
-def detect_service_health(
-    services,
-    files,
-    archive
-):
-
-    service_health = {}
-
-    for service in services:
-
-        directory = clean_path(
-            service.get(
-                "directory",
-                ""
-            )
-        ).strip("/")
-
-        if directory in (
-            "",
-            "."
-        ):
-
-            service_files = [
-                file
-                for file in files
-                if "/" not in file
-            ]
-
-        else:
-
-            service_files = [
-                file
-                for file in files
-                if file.startswith(
-                    directory + "/"
-                )
-            ]
-
-        for file in service_files:
-
-            if not file.lower().endswith(
-                CODE_EXTENSIONS
-            ):
-                continue
-
-            content = read_text_from_zip(
-                archive,
-                file,
-                400_000
-            )
-
-            matches = (
-                HEALTH_ROUTE_PATTERN.findall(
-                    content
-                )
-            )
-
-            if matches:
-
-                service_health[
-                    service["name"]
-                ] = matches[0]
-
-                break
-
-    return service_health
-
-
-# =========================================================
-# INFRASTRUCTURE DETECTION
-# =========================================================
-
-def detect_docker(files):
-
-    return [
-        file
-        for file in files
-        if basename(file)
-        in {
-            "dockerfile",
-            "containerfile"
-        }
-    ]
-
-
 def detect_zerops(files):
 
     return [
@@ -1746,365 +907,6 @@ def detect_iac(files):
 
     return results
 
-
-# =========================================================
-# SERVICE REFERENCE DETECTION
-# =========================================================
-
-def detect_service_urls(
-    services,
-    files,
-    archive
-):
-
-    service_refs = []
-
-    for service in services:
-
-        directory = clean_path(
-            service.get(
-                "directory",
-                ""
-            )
-        ).strip("/")
-
-        if directory in (
-            "",
-            "."
-        ):
-
-            relevant = [
-                file
-                for file in files
-                if "/" not in file
-            ]
-
-        else:
-
-            relevant = [
-                file
-                for file in files
-                if file.startswith(
-                    directory + "/"
-                )
-            ]
-
-        text = ""
-
-        for file in relevant[:150]:
-
-            if file.lower().endswith(
-                SOURCE_EXTENSIONS
-            ):
-
-                text += "\n" + read_text_from_zip(
-                    archive,
-                    file,
-                    250_000
-                )
-
-        for variable in unique(
-            URL_ENV_PATTERN.findall(text)
-        ):
-
-            if any(
-                token in variable
-                for token in (
-                    "DATABASE",
-                    "DB_",
-                    "REDIS",
-                    "S3",
-                    "AWS_",
-                    "KAFKA",
-                    "RABBIT",
-                    "QUEUE",
-                    "MONGO",
-                    "POSTGRES",
-                    "MYSQL"
-                )
-            ):
-                continue
-
-            service_refs.append({
-
-                "service":
-                    service["name"],
-
-                "variable":
-                    variable
-
-            })
-
-    return service_refs
-
-
-# =========================================================
-# ARCHITECTURE GRAPH
-# =========================================================
-
-def build_architecture(
-    services,
-    dependencies,
-    compose_services,
-    k8s_workloads
-):
-
-    nodes = []
-    connections = []
-
-    for service in services:
-
-        nodes.append({
-
-            "name":
-                service["name"],
-
-            "type":
-                service["type"],
-
-            "technology":
-                service["technology"],
-
-            "replicas":
-                service.get(
-                    "declared_replicas",
-                    1
-                )
-
-        })
-
-    for database in dependencies[
-        "databases"
-    ]:
-
-        nodes.append({
-
-            "name":
-                database.lower(),
-
-            "type":
-                "database",
-
-            "technology":
-                database
-
-        })
-
-    for queue in dependencies[
-        "queues"
-    ]:
-
-        nodes.append({
-
-            "name":
-                queue.lower().replace(
-                    " ",
-                    "-"
-                ),
-
-            "type":
-                "queue",
-
-            "technology":
-                queue
-
-        })
-
-    for cache in dependencies[
-        "caches"
-    ]:
-
-        nodes.append({
-
-            "name":
-                cache.lower(),
-
-            "type":
-                "cache",
-
-            "technology":
-                cache
-
-        })
-
-    for storage in dependencies[
-        "object_storage"
-    ]:
-
-        nodes.append({
-
-            "name":
-                storage.lower().replace(
-                    " ",
-                    "-"
-                ),
-
-            "type":
-                "object_storage",
-
-            "technology":
-                storage
-
-        })
-
-    frontends = [
-        service
-        for service in services
-        if service["type"] == "frontend"
-    ]
-
-    backends = [
-        service
-        for service in services
-        if service["type"] == "backend"
-    ]
-
-    workers = [
-        service
-        for service in services
-        if service["type"] == "worker"
-    ]
-
-    for frontend in frontends:
-
-        for backend in backends:
-
-            connections.append({
-
-                "from":
-                    frontend["name"],
-
-                "to":
-                    backend["name"],
-
-                "relationship":
-                    "request",
-
-                "inference":
-                    "static architecture inference"
-
-            })
-
-    for backend in backends:
-
-        for worker in workers:
-
-            connections.append({
-
-                "from":
-                    backend["name"],
-
-                "to":
-                    worker["name"],
-
-                "relationship":
-                    "processing",
-
-                "inference":
-                    "static architecture inference"
-
-            })
-
-        for database in dependencies[
-            "databases"
-        ]:
-
-            connections.append({
-
-                "from":
-                    backend["name"],
-
-                "to":
-                    database.lower(),
-
-                "relationship":
-                    "database",
-
-                "inference":
-                    "dependency detection"
-
-            })
-
-        for queue in dependencies[
-            "queues"
-        ]:
-
-            connections.append({
-
-                "from":
-                    backend["name"],
-
-                "to":
-                    queue.lower().replace(
-                        " ",
-                        "-"
-                    ),
-
-                "relationship":
-                    "queue",
-
-                "inference":
-                    "dependency detection"
-
-            })
-
-        for cache in dependencies[
-            "caches"
-        ]:
-
-            connections.append({
-
-                "from":
-                    backend["name"],
-
-                "to":
-                    cache.lower(),
-
-                "relationship":
-                    "cache",
-
-                "inference":
-                    "dependency detection"
-
-            })
-
-    for compose in compose_services:
-
-        for dependency in compose.get(
-            "depends_on",
-            []
-        ):
-
-            connections.append({
-
-                "from":
-                    compose["name"],
-
-                "to":
-                    dependency,
-
-                "relationship":
-                    "depends_on",
-
-                "inference":
-                    "Docker Compose"
-
-            })
-
-    return {
-
-        "nodes":
-            unique(nodes),
-
-        "connections":
-            unique(connections)
-
-    }
-
-
-# =========================================================
-# FAILURE SCENARIOS
-# =========================================================
 
 def build_failure_scenarios(
     services,
@@ -2256,10 +1058,6 @@ def build_failure_scenarios(
     return scenarios
 
 
-# =========================================================
-# RELIABILITY / RISK ENGINE
-# =========================================================
-
 def make_finding(
     severity,
     category,
@@ -2290,399 +1088,6 @@ def make_finding(
             score_impact
 
     }
-
-
-def analyze_reliability(
-    services,
-    dependencies,
-    health_endpoints,
-    service_health,
-    dockerfiles,
-    zerops_configs,
-    compose_services,
-    k8s_workloads,
-    env_info,
-    ci_cd,
-    iac
-):
-
-    findings = []
-
-    backends = [
-        service
-        for service in services
-        if service["type"] == "backend"
-    ]
-
-    frontends = [
-        service
-        for service in services
-        if service["type"] == "frontend"
-    ]
-
-    workers = [
-        service
-        for service in services
-        if service["type"] == "worker"
-    ]
-
-    for service in services:
-
-        replicas = service.get(
-            "declared_replicas",
-            1
-        )
-
-        if (
-            service["type"] == "backend"
-            and replicas < 2
-        ):
-
-            findings.append(
-                make_finding(
-
-                    "critical",
-
-                    "availability",
-
-                    f"{service['name']} Single Point of Failure",
-
-                    f"Only one instance is statically represented "
-                    f"for {service['name']}. A single instance can "
-                    "become a complete request-path failure.",
-
-                    f"Run at least 2 {service['name']} instances "
-                    "behind a health-aware load balancer.",
-
-                    25
-
-                )
-            )
-
-        elif (
-            service["type"] == "worker"
-            and replicas < 2
-        ):
-
-            findings.append(
-                make_finding(
-
-                    "warning",
-
-                    "availability",
-
-                    f"{service['name']} Worker Redundancy Not Detected",
-
-                    f"No redundant {service['name']} worker "
-                    "instances were detected.",
-
-                    f"Run multiple {service['name']} workers "
-                    "and use durable queue semantics where applicable.",
-
-                    10
-
-                )
-            )
-
-        elif (
-            service["type"] == "frontend"
-            and replicas < 2
-            and len(frontends) == 1
-        ):
-
-            findings.append(
-                make_finding(
-
-                    "warning",
-
-                    "availability",
-
-                    f"{service['name']} Frontend Redundancy Not Detected",
-
-                    "Only one frontend service/instance is represented.",
-
-                    "Use redundant frontend instances or a highly "
-                    "available static/CDN deployment.",
-
-                    8
-
-                )
-            )
-
-    if not health_endpoints:
-
-        findings.append(
-            make_finding(
-
-                "warning",
-
-                "observability",
-
-                "Health Check Not Detected",
-
-                "No common application health endpoint was detected.",
-
-                "Expose /health or /healthz and configure deployment "
-                "health checks.",
-
-                10
-
-            )
-        )
-
-    else:
-
-        missing = [
-            service["name"]
-            for service in services
-            if service["type"] in {
-                "backend",
-                "worker"
-            }
-            and service["name"]
-            not in service_health
-        ]
-
-        if missing:
-
-            findings.append(
-                make_finding(
-
-                    "warning",
-
-                    "observability",
-
-                    "Some Services Lack Health Checks",
-
-                    "Health endpoints exist somewhere in the project, "
-                    "but not every backend/worker service has a "
-                    "service-specific endpoint detected.",
-
-                    "Add service-specific health/readiness checks "
-                    "where appropriate.",
-
-                    5
-
-                )
-            )
-
-    for database in dependencies[
-        "databases"
-    ]:
-
-        findings.append(
-            make_finding(
-
-                "warning",
-
-                "data",
-
-                f"{database} Availability Must Be Reviewed",
-
-                f"{database} is a detected application dependency. "
-                "Static analysis cannot confirm whether the database "
-                "is replicated or highly available.",
-
-                f"Review {database} backups, replication, failover, "
-                "connection pooling and recovery requirements.",
-
-                8
-
-            )
-        )
-
-    if (
-        workers
-        and not dependencies["queues"]
-    ):
-
-        findings.append(
-            make_finding(
-
-                "warning",
-
-                "async",
-
-                "Worker Queue Not Detected",
-
-                "Background worker-like services were found but "
-                "no obvious durable messaging infrastructure "
-                "was detected.",
-
-                "Consider a durable queue to absorb bursts and "
-                "isolate producer/consumer failures.",
-
-                8
-
-            )
-        )
-
-    if (
-        not dockerfiles
-        and not compose_services
-        and not k8s_workloads
-    ):
-
-        findings.append(
-            make_finding(
-
-                "info",
-
-                "deployment",
-
-                "Container / Orchestration Configuration Not Detected",
-
-                "No Dockerfile, Compose service definition or "
-                "Kubernetes workload was detected.",
-
-                "Add explicit deployment configuration for "
-                "reproducible production deployment.",
-
-                3
-
-            )
-        )
-
-    if zerops_configs:
-
-        findings.append(
-            make_finding(
-
-                "info",
-
-                "deployment",
-
-                "Existing Zerops Configuration Detected",
-
-                "A Zerops configuration file already exists "
-                "in the project.",
-
-                "Compare the existing configuration with the "
-                "generated optimization plan.",
-
-                0
-
-            )
-        )
-
-    exposed_secrets = [
-        item
-        for item in env_info[
-            "potential_secrets"
-        ]
-        if item["value_exposed"]
-    ]
-
-    if exposed_secrets:
-
-        findings.append(
-            make_finding(
-
-                "critical",
-
-                "security",
-
-                "Potential Secrets Found in Environment Files",
-
-                f"{len(exposed_secrets)} secret-like environment "
-                "variables appear to have values in uploaded files.",
-
-                "Do not commit real credentials. Rotate exposed "
-                "secrets and use deployment secret management.",
-
-                20
-
-            )
-        )
-
-    if not ci_cd:
-
-        findings.append(
-            make_finding(
-
-                "info",
-
-                "delivery",
-
-                "CI/CD Configuration Not Detected",
-
-                "No common CI/CD workflow was detected.",
-
-                "Add automated build, test and deployment checks "
-                "before production rollout.",
-
-                3
-
-            )
-        )
-
-    if not iac:
-
-        findings.append(
-            make_finding(
-
-                "info",
-
-                "infrastructure",
-
-                "Infrastructure-as-Code Not Detected",
-
-                "No Terraform/Pulumi-style infrastructure "
-                "configuration was detected.",
-
-                "Consider versioning infrastructure configuration "
-                "when infrastructure complexity grows.",
-
-                2
-
-            )
-        )
-
-    if not services:
-
-        findings.append(
-            make_finding(
-
-                "critical",
-
-                "analysis",
-
-                "Application Service Could Not Be Identified",
-
-                "The analyzer could not confidently identify "
-                "an application service.",
-
-                "Use conventional service directories, a supported "
-                "manifest, Compose, or Kubernetes configuration.",
-
-                30
-
-            )
-        )
-
-    return findings
-
-
-def calculate_score(findings):
-
-    score = 100
-
-    for item in findings:
-
-        score -= int(
-            item.get(
-                "score_impact",
-                0
-            )
-        )
-
-    return max(
-        0,
-        min(
-            100,
-            score
-        )
-    )
 
 
 def calculate_risk_summary(
@@ -2733,365 +1138,6 @@ def calculate_risk_summary(
     }
 
 
-# =========================================================
-# BOTTLENECK ENGINE
-# =========================================================
-
-def detect_bottlenecks(
-    services,
-    dependencies,
-    findings,
-    architecture
-):
-
-    candidates = []
-
-    for service in services:
-
-        if service["type"] == "backend":
-
-            candidates.append({
-
-                "component":
-                    service["name"],
-
-                "type":
-                    "service",
-
-                "risk":
-                    "high",
-
-                "reason":
-                    "Backend services sit on the primary "
-                    "request path and are treated as "
-                    "single-instance unless deployment "
-                    "metadata says otherwise.",
-
-                "priority":
-                    90
-
-            })
-
-    for database in dependencies[
-        "databases"
-    ]:
-
-        candidates.append({
-
-            "component":
-                database,
-
-            "type":
-                "database",
-
-            "risk":
-                "high",
-
-            "reason":
-                "Detected database dependency can constrain "
-                "availability and throughput.",
-
-            "priority":
-                85
-
-        })
-
-    for queue in dependencies[
-        "queues"
-    ]:
-
-        candidates.append({
-
-            "component":
-                queue,
-
-            "type":
-                "queue",
-
-            "risk":
-                "medium",
-
-            "reason":
-                "Messaging infrastructure can become a "
-                "throughput or backlog bottleneck.",
-
-            "priority":
-                70
-
-        })
-
-    for cache in dependencies[
-        "caches"
-    ]:
-
-        candidates.append({
-
-            "component":
-                cache,
-
-            "type":
-                "cache",
-
-            "risk":
-                "medium",
-
-            "reason":
-                "Cache availability or saturation can affect "
-                "latency and dependency load.",
-
-            "priority":
-                60
-
-        })
-
-    for item in findings:
-
-        if item["severity"] == "critical":
-
-            candidates.append({
-
-                "component":
-                    item["title"],
-
-                "type":
-                    "finding",
-
-                "risk":
-                    "critical",
-
-                "reason":
-                    item["description"],
-
-                "priority":
-                    95
-
-            })
-
-    candidates.sort(
-        key=lambda item:
-            item["priority"],
-        reverse=True
-    )
-
-    return candidates[:10]
-
-
-# =========================================================
-# OPTIMIZATION PLAN
-# =========================================================
-
-def build_optimization_plan(
-    services,
-    dependencies,
-    findings,
-    deployment
-):
-
-    actions = []
-
-    for service in services:
-
-        replicas = service.get(
-            "declared_replicas",
-            1
-        )
-
-        if (
-            service["type"]
-            in {
-                "backend",
-                "worker",
-                "frontend"
-            }
-            and replicas < 2
-        ):
-
-            actions.append({
-
-                "priority":
-                    "high"
-                    if service["type"] == "backend"
-                    else "medium",
-
-                "service":
-                    service["name"],
-
-                "action":
-                    "Increase redundancy",
-
-                "current":
-                    f"{replicas} detected instance(s)",
-
-                "recommended":
-                    "2+ instances",
-
-                "reason":
-                    "Reduces the chance that one instance "
-                    "failure takes the service offline."
-
-            })
-
-        if (
-            service["name"]
-            not in deployment.get(
-                "service_health",
-                {}
-            )
-            and service["type"]
-            in {
-                "backend",
-                "worker"
-            }
-        ):
-
-            actions.append({
-
-                "priority":
-                    "medium",
-
-                "service":
-                    service["name"],
-
-                "action":
-                    "Add health/readiness checks",
-
-                "current":
-                    "No service-specific health endpoint detected",
-
-                "recommended":
-                    "/health or /healthz",
-
-                "reason":
-                    "Unhealthy instances can be removed from traffic."
-
-            })
-
-    if dependencies[
-        "databases"
-    ]:
-
-        actions.append({
-
-            "priority":
-                "high",
-
-            "service":
-                "database layer",
-
-            "action":
-                "Review database high availability",
-
-            "current":
-                ", ".join(
-                    dependencies["databases"]
-                ),
-
-            "recommended":
-                "Backups + replication/failover appropriate to workload",
-
-            "reason":
-                "Application redundancy does not remove a "
-                "database dependency bottleneck."
-
-        })
-
-    if (
-        any(
-            service["type"] == "worker"
-            for service in services
-        )
-        and not dependencies["queues"]
-    ):
-
-        actions.append({
-
-            "priority":
-                "medium",
-
-            "service":
-                "worker infrastructure",
-
-            "action":
-                "Introduce durable queueing",
-
-            "current":
-                "No queue detected",
-
-            "recommended":
-                "Durable queue + retry/dead-letter strategy",
-
-            "reason":
-                "Separates request producers from background consumers."
-
-        })
-
-    if (
-        not deployment.get(
-            "dockerfiles"
-        )
-        and not deployment.get(
-            "compose_files"
-        )
-        and not deployment.get(
-            "kubernetes_files"
-        )
-    ):
-
-        actions.append({
-
-            "priority":
-                "medium",
-
-            "service":
-                "deployment",
-
-            "action":
-                "Add explicit deployment configuration",
-
-            "current":
-                "No container/orchestration configuration detected",
-
-            "recommended":
-                "Containerized deployment definition",
-
-            "reason":
-                "Makes deployment reproducible and easier to optimize."
-
-        })
-
-    if not deployment.get(
-        "ci_cd"
-    ):
-
-        actions.append({
-
-            "priority":
-                "low",
-
-            "service":
-                "delivery",
-
-            "action":
-                "Add CI/CD validation",
-
-            "current":
-                "No CI/CD configuration detected",
-
-            "recommended":
-                "Automated build + test + deployment checks",
-
-            "reason":
-                "Prevents known reliability problems from reaching production."
-
-        })
-
-    return actions
-
-
-# =========================================================
-# ZEROPS CONFIG GENERATOR
-# =========================================================
-
 def zerops_technology(
     service
 ):
@@ -3133,85 +1179,6 @@ def sanitize_yaml_value(
         '\\"'
     )
 
-
-def generate_zerops_config(
-    services,
-    service_health
-):
-
-    lines = [
-
-        "# Generated by Zerops Autopilot",
-
-        "# Static analysis recommendation - "
-        "review before production use.",
-
-        "",
-
-        "project:",
-
-        "  name: optimized-application",
-
-        "",
-
-        "services:"
-
-    ]
-
-    for service in services:
-
-        name = sanitize_yaml_value(
-            service["name"]
-        )
-
-        technology = zerops_technology(
-            service
-        )
-
-        lines.append(
-            f'  - name: "{name}"'
-        )
-
-        lines.append(
-            f"    technology: {technology}"
-        )
-
-        if service["type"] in {
-            "backend",
-            "worker",
-            "frontend"
-        }:
-
-            lines.append(
-                "    replicas: 2"
-            )
-
-        health = service_health.get(
-            service["name"]
-        )
-
-        if health:
-
-            lines.append(
-                "    healthCheck:"
-            )
-
-            lines.append(
-                f'      path: "{sanitize_yaml_value(health)}"'
-            )
-
-        lines.append("")
-
-    return (
-        "\n".join(lines)
-        .rstrip()
-        + "\n"
-    )
-
-
-# =========================================================
-# SUMMARY
-# =========================================================
 
 def build_summary(
     services,
@@ -3297,11 +1264,832 @@ def build_summary(
     }
 
 
-# =========================================================
-# API
-# =========================================================
+VERSION = "6.0"
 
-@app.get("/")
+
+def _direct_files(files, directory):
+    directory = clean_path(directory).strip("/")
+    if not directory or directory == ".":
+        return [f for f in files if "/" not in f]
+    prefix = directory + "/"
+    return [f for f in files if f.startswith(prefix) and "/" not in f[len(prefix):]]
+
+
+def _all_files_under(files, directory):
+    directory = clean_path(directory).strip("/")
+    if not directory or directory == ".":
+        return [f for f in files if "/" not in f]
+    prefix = directory + "/"
+    return [f for f in files if f.startswith(prefix)]
+
+
+def _manifest_data(archive, directory_files):
+    for f in directory_files:
+        if basename(f) == "package.json":
+            data = read_package_json(archive, f)
+            if data:
+                return "Node.js", data, f
+    names = {basename(f) for f in directory_files}
+    if names.intersection({"requirements.txt", "pyproject.toml", "pipfile", "poetry.lock"}):
+        return "Python", {}, next((f for f in directory_files if basename(f) in {"requirements.txt", "pyproject.toml", "pipfile"}), None)
+    if names.intersection({"pom.xml", "build.gradle", "build.gradle.kts", "mvnw", "gradlew"}):
+        return "Java", {}, next((f for f in directory_files if basename(f) in {"pom.xml", "build.gradle", "build.gradle.kts"}), None)
+    if "go.mod" in names:
+        return "Go", {}, next((f for f in directory_files if basename(f) == "go.mod"), None)
+    if "cargo.toml" in names:
+        return "Rust", {}, next((f for f in directory_files if basename(f) == "cargo.toml"), None)
+    if "gemfile" in names:
+        return "Ruby", {}, next((f for f in directory_files if basename(f) == "gemfile"), None)
+    if "composer.json" in names:
+        return "PHP", {}, next((f for f in directory_files if basename(f) == "composer.json"), None)
+    if any(basename(f).endswith(".csproj") for f in directory_files):
+        return ".NET", {}, next((f for f in directory_files if basename(f).endswith(".csproj")), None)
+    return "Unknown", {}, None
+
+
+def _frameworks_and_scripts(archive, directory_files):
+    frameworks = set(detect_frameworks(directory_files, archive))
+    package = {}
+    package_file = None
+    for f in directory_files:
+        if basename(f) == "package.json":
+            package = read_package_json(archive, f)
+            package_file = f
+            break
+    deps = {}
+    deps.update(package.get("dependencies", {}) or {})
+    deps.update(package.get("devDependencies", {}) or {})
+    dep_names = {str(k).lower() for k in deps}
+    for framework, rules in FRAMEWORK_RULES.items():
+        if any(str(rule).lower() in dep_names for rule in rules):
+            frameworks.add(framework)
+    scripts = package.get("scripts", {}) if isinstance(package, dict) else {}
+    return sorted(frameworks), scripts, package, package_file
+
+
+def _classify_dynamic(name, technology, frameworks, scripts, text, image=None):
+    lname = name.lower()
+    framework_text = " ".join(frameworks).lower()
+    if any(x in framework_text for x in ("react", "next.js", "vite", "vue", "angular", "svelte")):
+        return "frontend"
+    if any(x in lname for x in WORKER_NAMES):
+        return "worker"
+    if any(token in text.lower() for token in (
+        "celery", "bullmq", "rq.worker", "kafkaconsumer", "consumer(", "dramatiq", "background_tasks"
+    )):
+        return "worker"
+    if "frontend" in lname or "client" in lname or "web" == lname:
+        # Name is only a weak signal; manifests/code above take precedence.
+        return "frontend"
+    if technology != "Unknown" or image:
+        return "backend"
+    return None
+
+
+def _compose_build_dir(item):
+    build = item.get("build")
+    if not build:
+        return ""
+    build = clean_path(str(build).strip("'\""))
+    if build in (".", ""):
+        return ""
+    # Compose can use a mapping: context: ./dir. The legacy parser may store a raw value.
+    return build
+
+
+def _compose_service_type(item):
+    image = (item.get("image") or "").lower()
+    name = item.get("name", "").lower()
+    if any(x in name for x in WORKER_NAMES):
+        return "worker"
+    if any(x in image for x in ("nginx", "caddy", "httpd")):
+        return "frontend"
+    return "backend"
+
+
+def parse_compose_services(archive, compose_files):
+    result = {}
+    for file in compose_files:
+        text = read_text_from_zip(archive, file, 2_000_000)
+        lines = text.splitlines()
+        in_services = False
+        current = None
+        block = None
+        for raw in lines:
+            if not raw.strip() or raw.lstrip().startswith("#"):
+                continue
+            indent = len(raw) - len(raw.lstrip(" "))
+            stripped = raw.strip()
+            if indent == 0 and stripped == "services:":
+                in_services = True; current = None; block = None; continue
+            if not in_services: continue
+            if indent == 2 and stripped.endswith(":") and not stripped.startswith("-"):
+                current = stripped[:-1].strip().strip("'\"")
+                result.setdefault(current, {"name": current, "file": file, "image": None, "build": None, "dockerfile": None, "ports": [], "depends_on": [], "replicas": None, "environment": [], "environment_values": {}})
+                block = None; continue
+            if not current or current not in result or indent < 4: continue
+            entry = result[current]
+            if indent == 4:
+                block = None
+                if stripped.startswith("image:"):
+                    entry["image"] = stripped.split(":",1)[1].strip().strip("'\"")
+                elif stripped == "build:" or stripped.startswith("build:"):
+                    value = stripped.split(":",1)[1].strip()
+                    entry["build"] = value.strip("'\"") if value else "."
+                    block = "build"
+                elif stripped == "ports:": block = "ports"
+                elif stripped == "depends_on:": block = "depends_on"
+                elif stripped == "environment:": block = "environment"
+                elif stripped == "deploy:": block = "deploy"
+                continue
+            if block == "build" and indent >= 6:
+                if stripped.startswith("context:"):
+                    entry["build"] = stripped.split(":",1)[1].strip().strip("'\"")
+                elif stripped.startswith("dockerfile:"):
+                    entry["dockerfile"] = stripped.split(":",1)[1].strip().strip("'\"")
+            elif block == "ports" and indent >= 6:
+                m = re.search(r"(\d{2,5})(?::(\d{2,5}))?", stripped)
+                if m:
+                    # Host:container -> application listens on container port.
+                    port = int(m.group(2) or m.group(1))
+                    if 10 <= port <= 65535: entry["ports"].append(port)
+            elif block == "depends_on" and indent >= 6:
+                dep = stripped.lstrip("- ").strip().strip("'\"")
+                if re.match(r"^[A-Za-z0-9_.-]+$", dep): entry["depends_on"].append(dep)
+            elif block == "environment" and indent >= 6:
+                value = stripped.lstrip("- ").strip().strip("'\"")
+                if ":" in value:
+                    key, val = value.split(":",1)
+                    entry["environment"].append(key.strip())
+                    entry["environment_values"][key.strip()] = val.strip().strip("'\"")
+                elif "=" in value:
+                    key, val = value.split("=",1)
+                    entry["environment"].append(key.strip())
+                    entry["environment_values"][key.strip()] = val.strip().strip("'\"")
+            elif block == "deploy" and indent >= 8:
+                m = re.match(r"replicas:\s*(\d+)", stripped)
+                if m: entry["replicas"] = int(m.group(1))
+    # Some Compose variants put build configuration in mappings; recover it from the raw text.
+    for item in result.values():
+        item["ports"] = unique(item["ports"]); item["depends_on"] = unique(item["depends_on"]); item["environment"] = unique(item["environment"])
+    return list(result.values())
+
+
+def _docker_named_files(files):
+    result = []
+    for f in files:
+        n = basename(f)
+        if n == "dockerfile" or n == "containerfile" or n.endswith(".dockerfile") or n.endswith(".containerfile"):
+            result.append(f)
+    return result
+
+
+def detect_docker(files):
+    return _docker_named_files(files)
+
+
+def detect_technologies(files, archive):
+    technologies = []
+    names = {basename(f) for f in files}
+    if "package.json" in names:
+        technologies.append("Node.js / JavaScript")
+    if names.intersection({"requirements.txt", "pyproject.toml", "pipfile", "poetry.lock"}):
+        technologies.append("Python")
+    if any(basename(f) in {"dockerfile", "containerfile"} or basename(f).endswith((".dockerfile", ".containerfile")) for f in files):
+        technologies.append("Docker / OCI")
+    if any(basename(f) in {"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"} for f in files):
+        technologies.append("Docker Compose")
+    if "pom.xml" in names or "build.gradle" in names or "build.gradle.kts" in names:
+        technologies.append("Java")
+    if "go.mod" in names:
+        technologies.append("Go")
+    if "cargo.toml" in names:
+        technologies.append("Rust")
+    if "gemfile" in names:
+        technologies.append("Ruby")
+    if "composer.json" in names:
+        technologies.append("PHP")
+    if any(basename(f).endswith(".csproj") for f in files):
+        technologies.append(".NET")
+    if any(clean_path(f).lower().startswith(".github/workflows/") for f in files):
+        technologies.append("GitHub Actions")
+    if any(clean_path(f).lower().startswith(".gitlab-ci") or basename(f).lower() == "jenkinsfile" for f in files):
+        technologies.append("CI/CD")
+    if detect_kubernetes_files(files, archive):
+        technologies.append("Kubernetes")
+    if detect_zerops(files):
+        technologies.append("Zerops")
+    return unique(technologies)
+
+
+def _service_local_dependency_evidence(archive, files, directory):
+    local = _all_files_under(files, directory)
+    text_parts = []
+    evidence = {"databases": {}, "queues": {}, "caches": {}, "object_storage": {}, "external_services": []}
+    for f in local[:300]:
+        if is_ignored(f) or not f.lower().endswith(SOURCE_EXTENSIONS):
+            continue
+        content = read_text_from_zip(archive, f, 350_000)
+        if content:
+            text_parts.append((f, content))
+    for category, patterns in DATABASE_PATTERNS.items():
+        hits = []
+        for f, content in text_parts:
+            low = content.lower()
+            found = [p for p in patterns if p.lower() in low]
+            if found:
+                hits.append({"file": f, "patterns": found[:5]})
+        if hits:
+            evidence["databases"][category] = hits[:8]
+    for category, patterns in QUEUE_PATTERNS.items():
+        hits = []
+        for f, content in text_parts:
+            low = content.lower()
+            found = [p for p in patterns if p.lower() in low]
+            if found:
+                hits.append({"file": f, "patterns": found[:5]})
+        if hits:
+            evidence["queues"][category] = hits[:8]
+    for category, patterns in CACHE_PATTERNS.items():
+        hits = []
+        for f, content in text_parts:
+            low = content.lower()
+            found = [p for p in patterns if p.lower() in low]
+            if found:
+                hits.append({"file": f, "patterns": found[:5]})
+        if hits:
+            evidence["caches"][category] = hits[:8]
+    for category, patterns in STORAGE_PATTERNS.items():
+        hits = []
+        for f, content in text_parts:
+            low = content.lower()
+            found = [p for p in patterns if p.lower() in low]
+            if found:
+                hits.append({"file": f, "patterns": found[:5]})
+        if hits:
+            evidence["object_storage"][category] = hits[:8]
+    for f, content in text_parts:
+        for url in re.findall(r"https?://[A-Za-z0-9._:-]+(?:/[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]*)?", content):
+            try:
+                host = urlparse(url).hostname
+            except Exception:
+                host = None
+            if host and host not in {"localhost", "127.0.0.1", "0.0.0.0"}:
+                evidence["external_services"].append({"host": host, "file": f})
+    evidence["external_services"] = unique(evidence["external_services"])[:50]
+    return evidence
+
+
+def _manifest_dependency_names(archive, files, directory):
+    names = set()
+    for f in _direct_files(files, directory):
+        b = basename(f)
+        if b == "package.json":
+            p = read_package_json(archive, f)
+            for group in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+                names.update(str(x).lower() for x in (p.get(group, {}) or {}).keys())
+        elif b in {"requirements.txt", "pipfile"}:
+            text = read_text_from_zip(archive, f, 500_000)
+            for line in text.splitlines():
+                m = re.match(r"\s*([A-Za-z0-9_.-]+)", line)
+                if m and not line.lstrip().startswith("#"):
+                    names.add(m.group(1).lower())
+    return names
+
+
+def detect_dependencies(files, archive):
+    """Detect infrastructure dependencies from service-local evidence, not repository-wide keywords."""
+    service_dirs = {".": _direct_files(files, ".")}
+    for path, _ in get_directories(files).items():
+        direct = _direct_files(files, path)
+        if direct and any(basename(f) in {"package.json", "requirements.txt", "pyproject.toml", "pom.xml", "go.mod", "cargo.toml", "gemfile", "composer.json"} for f in direct):
+            service_dirs[path] = direct
+    all_evidence = []
+    for directory in service_dirs:
+        ev = _service_local_dependency_evidence(archive, files, directory)
+        if any(ev[k] for k in ("databases", "queues", "caches", "object_storage")):
+            all_evidence.append((directory, ev))
+    dependencies = {"databases": [], "queues": [], "caches": [], "object_storage": [], "external_services": []}
+    evidence = {"databases": {}, "queues": {}, "caches": {}, "object_storage": {}, "external_services": []}
+    for directory, ev in all_evidence:
+        for category in ("databases", "queues", "caches", "object_storage"):
+            for tech, hits in ev[category].items():
+                if tech not in dependencies[category]:
+                    dependencies[category].append(tech)
+                evidence[category].setdefault(tech, []).append({"directory": directory, "evidence": hits})
+    # External URLs are evidence, but service-host URLs are not infrastructure dependencies.
+    hosts = set()
+    for directory in service_dirs:
+        ev = _service_local_dependency_evidence(archive, files, directory)
+        for item in ev["external_services"]:
+            hosts.add(item["host"])
+            evidence["external_services"].append({"directory": directory, **item})
+    # Do not report internal Compose/Kubernetes service hostnames as external services.
+    internal_hosts = set()
+    for d in service_dirs:
+        internal_hosts.add(directory_name(d).lower() if d not in ("", ".") else "application")
+    for f in files:
+        b = basename(f)
+        if b in {"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}:
+            txt = read_text_from_zip(archive, f, 1_000_000)
+            for m in re.finditer(r"(?m)^\s{2}([A-Za-z0-9_.-]+):\s*$", txt): internal_hosts.add(m.group(1).lower())
+    dependencies["external_services"] = sorted(h for h in hosts if h.lower() not in internal_hosts)[:100]
+    return dependencies, evidence
+
+
+def _infer_service_name_from_dir(path):
+    return directory_name(path) if path not in ("", ".") else "application"
+
+
+def _docker_stem(path):
+    n = basename(path)
+    if n in {"dockerfile", "containerfile"}:
+        return None
+    for suffix in (".dockerfile", ".containerfile"):
+        if n.endswith(suffix):
+            return n[:-len(suffix)]
+    return None
+
+
+def _dockerfile_metadata(archive, files, path):
+    if not path:
+        return {}
+    text = read_text_from_zip(archive, path, 800_000)
+    meta = {"path": path, "ports": [], "start": None, "copy_sources": []}
+    for m in re.finditer(r"(?im)^\s*EXPOSE\s+(\d{2,5})", text):
+        try: meta["ports"].append(int(m.group(1)))
+        except ValueError: pass
+    for m in re.finditer(r"(?im)^\s*(?:CMD|ENTRYPOINT)\s+(.+)$", text):
+        raw = m.group(1).strip()
+        try:
+            arr = json.loads(raw)
+            if isinstance(arr, list) and arr:
+                meta["start"] = " ".join(str(x) for x in arr)
+            else:
+                meta["start"] = raw
+        except Exception:
+            meta["start"] = raw
+    for m in re.finditer(r"(?im)^\s*COPY\s+(?:--[^ ]+\s+)*([^ ]+)\s+", text):
+        src = m.group(1).strip().strip("./")
+        if src and not src.startswith("--"):
+            meta["copy_sources"].append(src.rstrip("/"))
+    meta["ports"] = unique(meta["ports"])
+    meta["copy_sources"] = unique(meta["copy_sources"])
+    return meta
+
+
+def detect_services(files, archive, compose_services, k8s_workloads):
+    """Create logical services by merging source directories with deployment declarations."""
+    directories = get_directories(files)
+    candidates = []
+    for path, _descendants in directories.items():
+        direct = _direct_files(files, path)
+        if not direct:
+            continue
+        tech, manifest, manifest_file = _manifest_data(archive, direct)
+        frameworks, scripts, package, _ = _frameworks_and_scripts(archive, direct)
+        source_text = "\n".join(read_text_from_zip(archive, f, 250_000) for f in direct if f.lower().endswith(CODE_EXTENSIONS))
+        service_type = _classify_dynamic(directory_name(path), tech, frameworks, scripts, source_text)
+        if service_type:
+            candidates.append({
+                "name": directory_name(path), "technology": (tech + " / " + " + ".join(frameworks)) if frameworks else tech,
+                "type": service_type, "directory": path, "frameworks": frameworks,
+                "scripts": scripts, "manifest": manifest, "manifest_file": manifest_file,
+                "declared_replicas": None, "replica_source": "unknown", "compose_name": None,
+                "detected_dependencies": _service_local_dependency_evidence(archive, files, path)
+            })
+    # Root application only when there is a root manifest and no stronger child services.
+    root = _direct_files(files, ".")
+    if root:
+        tech, manifest, manifest_file = _manifest_data(archive, root)
+        if tech != "Unknown":
+            frameworks, scripts, package, _ = _frameworks_and_scripts(archive, root)
+            if not any(s.get("directory") == "." for s in candidates):
+                text = "\n".join(read_text_from_zip(archive, f, 250_000) for f in root if f.lower().endswith(CODE_EXTENSIONS))
+                candidates.append({
+                    "name": "application", "technology": (tech + " / " + " + ".join(frameworks)) if frameworks else tech,
+                    "type": _classify_dynamic("application", tech, frameworks, scripts, text) or "backend",
+                    "directory": ".", "frameworks": frameworks, "scripts": scripts,
+                    "manifest": manifest, "manifest_file": manifest_file,
+                    "declared_replicas": None, "replica_source": "unknown", "compose_name": None,
+                    "detected_dependencies": _service_local_dependency_evidence(archive, files, ".")
+                })
+    # Merge Compose declarations with source services by build context, then by exact name.
+    used = set()
+    logical = []
+    for item in compose_services:
+        build_dir = _compose_build_dir(item)
+        match = None
+        if build_dir:
+            for c in candidates:
+                if clean_path(c["directory"]) == build_dir or clean_path(c["directory"]).rstrip("/") == build_dir.rstrip("/"):
+                    match = c; break
+        # When Compose uses context: . with a named Dockerfile, match the Dockerfile stem
+        # or its COPY source to the actual application directory.
+        if match is None and item.get("dockerfile"):
+            df = clean_path(item["dockerfile"])
+            stem = _docker_stem(df)
+            for c in candidates:
+                if stem and c["name"].lower() == stem.lower():
+                    match = c; break
+                meta = _dockerfile_metadata(archive, files, df)
+                if c["directory"] in meta.get("copy_sources", []):
+                    match = c; break
+        if match is None:
+            for c in candidates:
+                if c["name"].lower() == item["name"].lower():
+                    match = c; break
+        if match is not None:
+            match = dict(match)
+            match["name"] = item["name"]
+            match["compose_name"] = item["name"]
+            if item.get("replicas") is not None:
+                match["declared_replicas"] = item["replicas"]
+                match["replica_source"] = "docker-compose"
+            match["compose"] = item
+            match["dockerfile"] = item.get("dockerfile")
+            match["docker"] = _dockerfile_metadata(archive, files, item.get("dockerfile"))
+            logical.append(match)
+            used.add(id(next(c for c in candidates if c is not None and c.get("directory") == match.get("directory")))) if False else None
+        else:
+            image = item.get("image")
+            tech = "Container"
+            if image:
+                low = image.lower()
+                if "node" in low: tech = "Node.js"
+                elif "python" in low: tech = "Python"
+                elif "nginx" in low: tech = "Nginx"
+            docker_meta = _dockerfile_metadata(archive, files, item.get("dockerfile"))
+            inferred_dir = next((x for x in docker_meta.get("copy_sources", []) if x in {c["name"] for c in candidates}), build_dir or "")
+            logical.append({
+                "name": item["name"], "technology": tech, "type": _compose_service_type(item),
+                "directory": inferred_dir, "frameworks": [], "scripts": {}, "manifest": {},
+                "manifest_file": None, "declared_replicas": item.get("replicas"),
+                "replica_source": "docker-compose" if item.get("replicas") is not None else "unknown",
+                "compose_name": item["name"], "compose": item, "dockerfile": item.get("dockerfile"), "docker": docker_meta,
+                "detected_dependencies": _service_local_dependency_evidence(archive, files, inferred_dir) if inferred_dir else {"databases": {}, "queues": {}, "caches": {}, "object_storage": {}, "external_services": []}
+            })
+    # Add source candidates not represented by Compose.
+    compose_dirs = {clean_path(_compose_build_dir(x)).rstrip("/") for x in compose_services if _compose_build_dir(x)}
+    compose_names = {x["name"].lower() for x in compose_services}
+    represented_dirs = set(compose_dirs)
+    represented_names = set(compose_names)
+    for item in compose_services:
+        if item.get("dockerfile"):
+            df = clean_path(item["dockerfile"])
+            stem = _docker_stem(df)
+            if stem:
+                represented_names.add(stem.lower())
+            meta = _dockerfile_metadata(archive, files, df)
+            for src in meta.get("copy_sources", []):
+                represented_names.add(directory_name(src).lower())
+    for c in candidates:
+        if clean_path(c["directory"]).rstrip("/") in represented_dirs or c["name"].lower() in represented_names:
+            continue
+        logical.append(c)
+    # Add Kubernetes workloads not represented by an existing logical service.
+    for k in k8s_workloads:
+        if any(s["name"].lower() == k["name"].lower() for s in logical):
+            continue
+        logical.append({
+            "name": k["name"], "technology": "Kubernetes", "type": _classify_dynamic(k["name"], "Kubernetes", [], {}, "") or "backend",
+            "directory": "", "frameworks": [], "scripts": {}, "manifest": {}, "manifest_file": None,
+            "declared_replicas": k.get("replicas"), "replica_source": "kubernetes", "compose_name": None,
+            "kubernetes": k, "detected_dependencies": {"databases": {}, "queues": {}, "caches": {}, "object_storage": {}, "external_services": []}
+        })
+    # Attach container-only Dockerfiles only when no logical service already represents the stem.
+    for dockerfile in _docker_named_files(files):
+        stem = _docker_stem(dockerfile)
+        if not stem:
+            continue
+        if any(s["name"].lower() == stem.lower() or directory_name(s.get("directory", "")).lower() == stem.lower() for s in logical if s.get("directory") or s.get("name")):
+            continue
+        logical.append({
+            "name": stem, "technology": "Container", "type": _classify_dynamic(stem, "Container", [], {}, "", image="container") or "backend",
+            "directory": "", "frameworks": [], "scripts": {}, "manifest": {}, "manifest_file": None,
+            "declared_replicas": None, "replica_source": "unknown", "compose_name": None,
+            "dockerfile": dockerfile, "detected_dependencies": {"databases": {}, "queues": {}, "caches": {}, "object_storage": {}, "external_services": []}
+        })
+    # Stable unique logical identities.
+    result = []
+    seen = set()
+    for s in logical:
+        key = (s["name"].lower(), clean_path(s.get("directory", "")), s["type"])
+        if key not in seen:
+            seen.add(key); result.append(s)
+    return result
+
+
+def detect_service_health(services, files, archive):
+    result = {}
+    for service in services:
+        directory = service.get("directory", "")
+        candidates = _all_files_under(files, directory) if directory else []
+        for f in candidates:
+            if not f.lower().endswith(CODE_EXTENSIONS):
+                continue
+            content = read_text_from_zip(archive, f, 500_000)
+            matches = HEALTH_ROUTE_PATTERN.findall(content)
+            if matches:
+                result[service["name"]] = sorted(unique(matches), key=len)[0]
+                break
+    return result
+
+
+def _service_aliases(service):
+    aliases = {service["name"].lower()}
+    if service.get("compose_name"):
+        aliases.add(service["compose_name"].lower())
+    d = clean_path(service.get("directory", ""))
+    if d and d != ".":
+        aliases.add(directory_name(d).lower())
+    return aliases
+
+
+def _find_target_service(host, services):
+    h = (host or "").lower().strip().rstrip(".")
+    if not h:
+        return None
+    for s in services:
+        if h in _service_aliases(s):
+            return s
+    # common URL forms can include service:port; host is already normalized by urlparse.
+    return None
+
+
+def detect_service_urls(services, files, archive):
+    refs = []
+    for source in services:
+        # Compose environment variables are first-class evidence.
+        compose = source.get("compose") or {}
+        for key, value in (compose.get("environment_values") or {}).items():
+            if not isinstance(value, str) or "://" not in value:
+                continue
+            try:
+                target = _find_target_service(urlparse(value).hostname, services)
+            except Exception:
+                target = None
+            if target and target["name"] != source["name"]:
+                refs.append({"from": source["name"], "to": target["name"], "file": compose.get("file", "docker-compose.yml"), "relationship": "request", "evidence": f"{key}={value}", "confidence": "high"})
+        directory = source.get("directory", "")
+        relevant = _all_files_under(files, directory) if directory else []
+        for f in relevant[:500]:
+            if is_ignored(f) or not f.lower().endswith(SOURCE_EXTENSIONS):
+                continue
+            content = read_text_from_zip(archive, f, 500_000)
+            # URLs and URI-like environment values. Only create service edges when the host matches a discovered service.
+            urls = re.findall(r"(?:https?|redis|postgres(?:ql)?|mysql|mongodb(?:\+srv)?|amqp)://[^\s'\"`<>]+", content, flags=re.I)
+            for raw in urls:
+                try:
+                    parsed = urlparse(raw)
+                    target = _find_target_service(parsed.hostname, services)
+                except Exception:
+                    target = None
+                if target and target["name"] != source["name"]:
+                    refs.append({"from": source["name"], "to": target["name"], "file": f, "relationship": "request", "evidence": raw[:180], "confidence": "high"})
+            # Also inspect explicit service URL environment variables whose values are URLs.
+            for m in re.finditer(r"\b([A-Z][A-Z0-9_]*(?:URL|URI|HOST|ENDPOINT)[A-Z0-9_]*)\s*[:=]\s*['\"]?([^\s'\"\n]+)", content):
+                value = m.group(2)
+                try:
+                    target = _find_target_service(urlparse(value).hostname, services)
+                except Exception:
+                    target = None
+                if target and target["name"] != source["name"]:
+                    refs.append({"from": source["name"], "to": target["name"], "file": f, "relationship": "request", "evidence": m.group(0)[:180], "confidence": "high"})
+    return unique(refs)
+
+
+def build_architecture(services, dependencies, compose_services, k8s_workloads):
+    nodes = []
+    connections = []
+    for s in services:
+        node = {"name": s["name"], "type": s["type"], "technology": s["technology"]}
+        if s.get("declared_replicas") is not None:
+            node["replicas"] = s["declared_replicas"]
+            node["replica_source"] = s.get("replica_source", "declared")
+        else:
+            node["replicas"] = None
+            node["replica_source"] = "unknown"
+        nodes.append(node)
+    for category, ntype in (("databases", "database"), ("queues", "queue"), ("caches", "cache"), ("object_storage", "object_storage")):
+        for dep in dependencies[category]:
+            nodes.append({"name": dep.lower().replace(" ", "-"), "type": ntype, "technology": dep})
+    # Compose relationships are explicit evidence.
+    service_by_name = {s["name"].lower(): s for s in services}
+    aliases = {}
+    for s in services:
+        for a in _service_aliases(s): aliases[a] = s
+    for s in services:
+        compose = s.get("compose") or {}
+        for dep in compose.get("depends_on", []):
+            target = aliases.get(dep.lower())
+            if target and target["name"] != s["name"]:
+                connections.append({"from": s["name"], "to": target["name"], "relationship": "depends_on", "inference": "Docker Compose", "confidence": "high", "evidence": "depends_on"})
+    # Source-code URL references are strongest dynamic evidence.
+    for s in services:
+        directory = s.get("directory", "")
+        for f in (_all_files_under(_ANALYSIS_FILES, directory) if directory else []):
+            pass
+    # Service-local dependencies.
+    for s in services:
+        ev = s.get("detected_dependencies") or {}
+        for category, ntype in (("databases", "database"), ("queues", "queue"), ("caches", "cache"), ("object_storage", "object_storage")):
+            for dep in ev.get(category, {}):
+                node_name = dep.lower().replace(" ", "-")
+                connections.append({"from": s["name"], "to": node_name, "relationship": ntype, "inference": "service-local dependency evidence", "confidence": "medium", "evidence": ev[category][dep][:3]})
+    # detect_service_urls is called separately by the endpoint; store refs globally for this invocation.
+    for ref in globals().get("_CURRENT_SERVICE_URL_REFS", []):
+        connections.append(ref)
+    return {"nodes": unique(nodes), "connections": unique(connections)}
+
+
+def analyze_reliability(services, dependencies, health_endpoints, service_health, dockerfiles, zerops_configs, compose_services, k8s_workloads, env_info, ci_cd, iac):
+    findings = []
+    for s in services:
+        replicas = s.get("declared_replicas")
+        if replicas is not None and replicas < 2 and s["type"] in {"backend", "frontend", "worker"}:
+            severity = "critical" if s["type"] == "backend" else "warning"
+            impact = 18 if severity == "critical" else 7
+            findings.append(make_finding(severity, "availability", f"{s['name']} Redundancy Not Detected",
+                f"The deployment configuration explicitly declares {replicas} instance(s) for {s['name']}.",
+                f"Consider running at least 2 {s['name']} instances where the workload and platform support horizontal redundancy.", impact))
+        elif replicas is None and s["type"] in {"backend", "frontend", "worker"}:
+            findings.append(make_finding("info", "availability", f"{s['name']} Replica Count Unknown",
+                f"No explicit replica count was found for {s['name']} in the analyzed deployment configuration.",
+                "Verify the production service's scaling and redundancy policy rather than assuming a replica count from source code.", 0))
+    app_services = [s for s in services if s["type"] in {"backend", "worker"}]
+    if not health_endpoints:
+        findings.append(make_finding("warning", "observability", "Health Check Not Detected",
+            "No common application health endpoint was detected.", "Expose a service-specific readiness/health endpoint where appropriate.", 8))
+    else:
+        missing = [s["name"] for s in app_services if s["name"] not in service_health]
+        if missing:
+            findings.append(make_finding("warning", "observability", "Some Services Lack Health Checks",
+                "Health endpoints exist, but some application services do not have a service-specific endpoint detected.",
+                "Add service-specific health/readiness checks where appropriate.", 4))
+    for db in dependencies["databases"]:
+        findings.append(make_finding("warning", "data", f"{db} Availability Must Be Reviewed",
+            f"{db} was detected from service-local dependency evidence. Static analysis cannot confirm its production availability model.",
+            f"Review {db} replication, backups, failover, connection pooling and recovery requirements.", 5))
+    if any(s["type"] == "worker" for s in services) and not dependencies["queues"]:
+        findings.append(make_finding("info", "async", "Worker Queue Not Detected",
+            "Worker-like application code was detected but no queue technology was identified from service-local evidence.",
+            "If these workers consume asynchronous jobs, verify the queue or broker configuration.", 2))
+    if not dockerfiles and not compose_services and not k8s_workloads:
+        findings.append(make_finding("info", "deployment", "Container / Orchestration Configuration Not Detected",
+            "No Dockerfile, Compose service definition or Kubernetes workload was detected.",
+            "Add explicit deployment configuration if reproducible containerized deployment is required.", 2))
+    if zerops_configs:
+        findings.append(make_finding("info", "deployment", "Existing Zerops Configuration Detected",
+            "A Zerops deployment configuration exists in the project.",
+            "Compare it with the generated configuration and keep project-specific deployment decisions under version control.", 0))
+    exposed = [x for x in env_info.get("potential_secrets", []) if x.get("value_exposed")]
+    if exposed:
+        findings.append(make_finding("critical", "security", "Potential Secrets Found in Environment Files",
+            f"{len(exposed)} secret-like environment variables appear to contain values in uploaded files.",
+            "Do not commit real credentials. Rotate exposed secrets and use deployment secret management.", 20))
+    if not ci_cd:
+        findings.append(make_finding("info", "delivery", "CI/CD Configuration Not Detected",
+            "No common CI/CD workflow was detected.", "Add automated build, test and deployment checks before production rollout.", 2))
+    if not iac:
+        findings.append(make_finding("info", "infrastructure", "Infrastructure-as-Code Not Detected",
+            "No Terraform/Pulumi-style infrastructure configuration was detected.", "Consider versioning infrastructure configuration when infrastructure complexity grows.", 1))
+    if not services:
+        findings.append(make_finding("critical", "analysis", "Application Service Could Not Be Identified",
+            "The analyzer could not confidently identify an application service.", "Provide a supported manifest or deployment configuration, or keep an identifiable application entrypoint.", 25))
+    return findings
+
+
+def detect_bottlenecks(services, dependencies, findings, architecture):
+    candidates = []
+    inbound = {s["name"]: 0 for s in services}
+    outbound = {s["name"]: 0 for s in services}
+    for c in architecture.get("connections", []):
+        if c.get("from") in outbound: outbound[c["from"]] += 1
+        if c.get("to") in inbound: inbound[c["to"]] += 1
+    for s in services:
+        score = inbound.get(s["name"], 0) * 20 + outbound.get(s["name"], 0) * 5
+        if s.get("declared_replicas") == 1:
+            score += 35
+        if score >= 25:
+            candidates.append({"component": s["name"], "type": "service", "risk": "medium" if score < 60 else "high",
+                "reason": f"Detected dependency graph shows {inbound.get(s['name'],0)} inbound and {outbound.get(s['name'],0)} outbound relationship(s).",
+                "priority": min(100, score)})
+    for db in dependencies["databases"]:
+        candidates.append({"component": db, "type": "database", "risk": "medium",
+            "reason": "A service-local database dependency was detected; static analysis cannot determine its capacity or HA configuration.", "priority": 50})
+    for q in dependencies["queues"]:
+        candidates.append({"component": q, "type": "queue", "risk": "medium",
+            "reason": "A service-local messaging dependency was detected; queue capacity and backlog behavior are runtime concerns.", "priority": 45})
+    candidates.sort(key=lambda x: x["priority"], reverse=True)
+    return candidates[:10]
+
+
+def build_optimization_plan(services, dependencies, findings, deployment):
+    actions = []
+    for s in services:
+        replicas = s.get("declared_replicas")
+        if replicas == 1 and s["type"] in {"backend", "frontend", "worker"}:
+            actions.append({"priority": "high" if s["type"] == "backend" else "medium", "service": s["name"], "action": "Increase redundancy", "current": "1 declared instance", "recommended": "2+ instances where supported", "why": "The deployment explicitly declares one instance."})
+        elif replicas is None and s["type"] in {"backend", "frontend", "worker"}:
+            actions.append({"priority": "info", "service": s["name"], "action": "Verify scaling policy", "current": "Replica count not declared", "recommended": "Set production scaling explicitly", "why": "Static source analysis cannot assume the runtime replica count."})
+        if s["name"] not in deployment.get("health_endpoints_by_service", {}) and s["type"] in {"backend", "worker"}:
+            actions.append({"priority": "medium", "service": s["name"], "action": "Add service health check", "current": "Not detected", "recommended": "/health or another service-specific endpoint", "why": "Health checks allow unhealthy instances to be removed from service."})
+    if not actions:
+        actions.append({"priority": "info", "service": "application", "action": "No static optimization required", "current": "No high-confidence configuration gap detected", "recommended": "Validate runtime capacity and failure behavior", "why": "Static analysis cannot replace production load and failure testing."})
+    return {"actions": actions, "current_reliability": None, "optimized_reliability": None, "improvement": None}
+
+
+def _yaml_quote(value):
+    return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ') + '"'
+
+
+def _node_start(service):
+    scripts = service.get("scripts") or {}
+    if "start" in scripts: return "npm start"
+    if "start:prod" in scripts: return "npm run start:prod"
+    if "serve" in scripts: return "npm run serve"
+    docker = service.get("docker") or {}
+    if docker.get("start"): return docker["start"]
+    return None
+
+
+def _python_entry(service):
+    files = []
+    mf = service.get("manifest_file")
+    if mf: files.append(mf)
+    d = service.get("directory", "")
+    # Prefer common executable names only as an evidence-based fallback.
+    candidates = ["app.py", "main.py", "server.py", "run.py"]
+    for name in candidates:
+        files.append(clean_path(d + "/" + name) if d and d != "." else name)
+    for f in files:
+        if f.lower().endswith(".py"):
+            return f
+    return "main.py"
+
+
+def generate_zerops_config(services, service_health):
+    """Generate a conservative, evidence-derived zerops.yaml using the current Zerops schema."""
+    lines = ["# Generated by Zerops Autopilot", "# Review all commands, service names and ports before deployment.", "", "zerops:"]
+    for s in services:
+        name = re.sub(r"[^A-Za-z0-9_-]", "-", s["name"]).strip("-") or "app"
+        tech = (s.get("technology") or "").lower()
+        directory = clean_path(s.get("directory", ""))
+        indent = "  "
+        lines.append(f"{indent}- setup: {name}")
+        # Only add build when there is evidence that a build is needed.
+        if "node.js" in tech or "node" in tech:
+            if directory and directory != ".":
+                lines += [f"    build:", f"      base: nodejs@latest", f"      buildCommands:", f"        - cd {directory} && npm install"]
+                if "build" in (s.get("scripts") or {}):
+                    lines.append(f"        - cd {directory} && npm run build")
+                if "frontend" == s["type"] and ("vite" in tech or "dist" in directory.lower() or "react" in tech):
+                    lines += [f"      deployFiles:", f"        - ./{directory}/dist"]
+                else:
+                    lines += [f"      deployFiles:", f"        - ./{directory}/~"]
+            else:
+                lines += [f"    build:", f"      base: nodejs@latest", f"      buildCommands:", f"        - npm install"]
+                if "build" in (s.get("scripts") or {}): lines.append("        - npm run build")
+                lines += [f"      deployFiles:", f"        - ./~"]
+            lines += [f"    run:", f"      base: nodejs@latest"]
+            start = _node_start(s)
+            if start:
+                lines.append(f"      start: {start if not directory or directory == '.' else 'cd ' + directory + ' && ' + start}")
+            else:
+                lines.append("      # start command could not be determined with high confidence")
+        elif "python" in tech:
+            if directory and directory != ".":
+                lines += [f"    build:", f"      base: python@latest", f"      deployFiles:", f"        - ./{directory}/~"]
+                lines += [f"    run:", f"      base: python@latest", f"      prepareCommands:", f"        - python3 -m pip install -r {directory}/requirements.txt --ignore-installed"]
+                lines.append(f"      start: python3 {_python_entry(s)}")
+            else:
+                lines += [f"    build:", f"      base: python@latest", f"      deployFiles:", f"        - ./~", f"    run:", f"      base: python@latest", f"      prepareCommands:", f"        - python3 -m pip install -r requirements.txt --ignore-installed", f"      start: python3 {_python_entry(s)}"]
+        else:
+            lines += [f"    run:", f"      base: nodejs@latest", f"      # Runtime command was not inferred with high confidence."]
+        # Port evidence from Compose is safest; otherwise omit ports rather than inventing 3000.
+        compose = s.get("compose") or {}
+        ports = compose.get("ports") or []
+        if ports:
+            # Insert ports before start is cumbersome; rebuild run block is unnecessary for UI output.
+            # We append valid run keys after start; YAML order is irrelevant.
+            lines += ["      ports:"]
+            for p in ports:
+                lines += [f"        - port: {p}", "          httpSupport: true"]
+        health = service_health.get(s["name"])
+        if health and ports:
+            lines += ["      healthCheck:", "        httpGet:", f"          port: {ports[0]}", f"          path: {health}"]
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def calculate_score(findings):
+    score = 100
+    for item in findings:
+        score -= int(item.get("score_impact", 0) or 0)
+    return max(0, min(100, score))
+
+
 def home():
 
     return jsonify({
@@ -3327,8 +2115,6 @@ def home():
     })
 
 
-@app.get("/health")
-@app.get("/api/health")
 def health():
 
     return jsonify({
@@ -3345,7 +2131,6 @@ def health():
     })
 
 
-@app.post("/analyze-project")
 def analyze_project():
 
     if "project" not in request.files:
@@ -3498,6 +2283,10 @@ def analyze_project():
                         archive
                     )
                 )
+
+                global _ANALYSIS_FILES, _CURRENT_SERVICE_URL_REFS
+                _ANALYSIS_FILES = files
+                _CURRENT_SERVICE_URL_REFS = service_url_references
 
                 architecture = build_architecture(
                     services,
